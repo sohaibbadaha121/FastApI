@@ -1,0 +1,8 @@
+Error Type: ValueError
+Error Message: No API Key available
+
+Full Traceback:
+Traceback (most recent call last):
+  File "C:\Users\laith\OneDrive\Desktop\FastApi\tests\test_gemini.py", line 62, in <module>
+    raise ValueError("No API Key available")
+ValueError: No API Key available
