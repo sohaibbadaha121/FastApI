@@ -37,18 +37,15 @@ else:
     print("Please ensure 'OPENROUTER_API_KEY' is set in your .env file")
     sys.exit(1)
 
-# 3. Configure Client
 try:
     client = OpenAI(
         base_url="https://openrouter.ai/api/v1",
         api_key=api_key,
     )
 
-    # 4. specific Model (Free option for testing)
-    model_name = "meta-llama/llama-3.2-3b-instruct:free" 
+    model_name = "google/gemini-2.0-flash-exp:free"
     print(f"Sending test request to OpenRouter (using {model_name})...")
     
-    # 5. Send Request
     response = client.chat.completions.create(
         model=model_name,
         messages=[
