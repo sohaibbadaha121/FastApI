@@ -13,9 +13,26 @@ from app.models import Document, Entity, EntityRelationship
 from typing import Optional, List
 from sqlalchemy import or_, cast, String
 from app.pdf_processor import extract_text_from_pdf
+from openai import OpenAI
 
 load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+
+# OpenRouter Configuration
+openrouter_api_key = (
+    os.getenv("OPENROUTER_API_KEY") or 
+    os.getenv("OPENROUTER_KEY") or 
+    os.getenv("OPENROUTER") or
+    os.getenv("OPEN_ROUTER") or
+    os.getenv("OPEN_ROUTER_API_KEY")
+)
+or_client = None
+if openrouter_api_key:
+    or_client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=openrouter_api_key
+    )
+OR_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-exp:free")
 
 app = FastAPI()
 
@@ -104,7 +121,10 @@ async def ask_question(file: UploadFile = File(...), question: str = Form(...)):
         if not law_text:
             return {"error": "Could not extract text from the PDF file."}
 
-        # 3. Use Gemini to answer the question
+        if not or_client:
+            return {"error": "OpenRouter API key is not configured. Please check your .env file."}
+
+        # 3. Use OpenRouter to answer the question
         prompt = f"""
 You are a legal assistant AI.
 Here is a law text extracted from a PDF:
@@ -115,11 +135,19 @@ The user asks this question based on the content above:
 
 Give a clear and correct answer in Arabic based only on the text provided.
 """
-        model = genai.GenerativeModel("gemini-2.5-flash")
-        response = model.generate_content(prompt)
+        messages = [
+            {"role": "user", "content": prompt}
+        ]
+        
+        response = or_client.chat.completions.create(
+            model=OR_MODEL,
+            messages=messages
+        )
+        
+        answer_text = response.choices[0].message.content
         
         return {
-            "answer": response.text,
+            "answer": answer_text,
             "filename": file.filename,
             "text_length": len(law_text)
         }
