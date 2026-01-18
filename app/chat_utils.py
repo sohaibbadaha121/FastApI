@@ -25,7 +25,7 @@ if api_key:
         api_key=api_key
     )
 
-MODEL_NAME = os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-exp:free")
+MODEL_NAME = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
 DB_PATH = "legal_documents.db"
 
 def get_sql_from_llm(user_question):
@@ -37,20 +37,28 @@ def get_sql_from_llm(user_question):
         return None
 
     schema_info = """
-قاعدة البيانات: entities, entity_relationships
+أنت خبير SQLite. الجداول المتاحة:
 
-الجداول:
-1. entities: تحتوي على معلومات القضية (case_number, judge, plaintiff, defendant, verdict, etc.)
-2. entity_relationships: تحتوي على العلاقات المستخرجة (from_entity, relationship_type, to_entity) والمرتبطة بـ document_id.
+1. جدول [entities]: يحتوي على (case_number, court_name, judge, plaintiff, defendant, verdict, reasoning).
+   - يستخدم للبحث عن: أسماء القضاة، المدعين، المدعى عليهم، أرقام القضايا، وعدد القضايا.
 
-القواعد:
-1. أرجع كود SQL فقط لـ SQLite.
-2. للبحث عن "علاقات" (Relationships): ابحث في جدول `entity_relationships`.
-3. للربط بين الجداول: استخدم `document_id`.
-   مثال: "العلاقات في قضايا القاضي أحمد" -> 
-   SELECT r.* FROM entity_relationships r JOIN entities e ON r.document_id = e.document_id WHERE e.judge LIKE '%أحمد%'
-4. استخدم LIKE دائماً للبحث عن الأسماء.
-5. **قاعدة من ذهب**: انسخ الاسم من السؤال كما هو تماماً.
+2. جدول [entity_relationships]: يحتوي على (from_entity, relationship_type, to_entity).
+   - يستخدم **فقط** عند السؤال عن كلمة "علاقات" أو "روابط".
+
+أمثلة (التزم بنفس النمط تماماً):
+س: كم عدد قضايا القاضي أحمد المغني؟
+ج: SELECT COUNT(*) FROM entities WHERE judge LIKE '%أحمد المغني%';
+
+س: ابحث عن علاقات أحمد
+ج: SELECT * FROM entity_relationships WHERE from_entity LIKE '%أحمد%' OR to_entity LIKE '%أحمد%';
+
+س: تفاصيل قضايا المتهم علي
+ج: SELECT * FROM entities WHERE defendant LIKE '%علي%';
+
+قواعد حاسمة:
+- ممنوع استخدام JOIN نهائياً.
+- ممنوع وضع % داخل الاسم (مثلاً '%أحمد %علي%' خطأ، الصحيح '%أحمد علي%').
+- أرجع فقط كود SQL.
 """
 
     system_prompt = f"أنت خبير SQL متخصص في القضايا القانونية العربية. مهمتك هي تحويل السؤال إلى SQL بدقة متناهية.\n{schema_info}"

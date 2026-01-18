@@ -3,7 +3,6 @@ import os
 import json
 import re
 
-# Add root directory to sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.database import SessionLocal
@@ -23,10 +22,6 @@ def clean_json_str(json_str):
 def parse_manual_data_robust(file_path):
     with open(file_path, 'r', encoding='utf-8') as f:
         content = f.read()
-
-    # Split by the separator user used
-    # Regex to find: // for <filename>
-    # We will iterate through findings
     
     pattern = re.compile(r'//\s*for\s+([^\r\n]+)', re.IGNORECASE)
     matches = list(pattern.finditer(content))
@@ -37,7 +32,7 @@ def parse_manual_data_robust(file_path):
         filename_raw = match.group(1).strip()
         start_idx = match.end()
         
-        # End index is the start of next match or EOF
+      
         if i + 1 < len(matches):
             end_idx = matches[i+1].start()
         else:
@@ -61,33 +56,30 @@ def parse_manual_data_robust(file_path):
             
         print(f"Found section for: {filename}")
         
-        # Extract JSON
+        
         try:
             # Find the outer braces
             json_start = json_chunk.find('{')
             json_end = json_chunk.rfind('}') + 1
             
             if json_start == -1 or json_end == 0:
-                print(f"  ❌ No JSON found for {filename}")
+                print(f"   No JSON found for {filename}")
                 continue
                 
             clean_chunk = json_chunk[json_start:json_end]
-            # Remove comments inside just in case, though standard JSON won't have them
-            # pure JSON doesn't support comments, but the user might have left some?
-            # We'll try loading directly first.
+        
             try:
                 data = json.loads(clean_chunk)
                 results[filename] = data
-                print(f"  ✅ Parsed JSON for {filename}")
+                print(f"   Parsed JSON for {filename}")
             except json.JSONDecodeError as e:
-                # Try simple comment stripping //
                 clean_chunk = clean_json_str(clean_chunk)
                 data = json.loads(clean_chunk)
                 results[filename] = data
-                print(f"  ✅ Parsed JSON for {filename} (after cleaning)")
+                print(f"   Parsed JSON for {filename} (after cleaning)")
                 
         except Exception as e:
-            print(f"  ❌ Error parsing {filename}: {e}")
+            print(f"   Error parsing {filename}: {e}")
             
     return results
 
@@ -95,19 +87,16 @@ def delete_existing_data(db, filename):
     print(f"Checking for existing data for {filename}...")
     doc = db.query(Document).filter(Document.filename == filename).first()
     if doc:
-        print(f"  🗑️  Deleting existing document ID: {doc.id}")
-        # Delete children manually if cascading is not set up, though usually it should be.
-        # Let's be safe and delete children.
+        print(f"    Deleting existing document ID: {doc.id}")   
         db.query(EntityRelationship).filter(EntityRelationship.document_id == doc.id).delete()
         db.query(Entity).filter(Entity.document_id == doc.id).delete()
         db.delete(doc)
         db.commit()
-        print("  ✅ Deleted.")
+        print("   Deleted.")
     else:
-        print("  ✨ No existing document found.")
+        print("  No existing document found.")
 
 def insert_data(db, filename, data):
-    # 1. Get raw text from file system
     legal_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "legal")
     pdf_path = os.path.join(legal_dir, filename)
     
@@ -116,14 +105,11 @@ def insert_data(db, filename, data):
         try:
             raw_text = extract_text_from_pdf(pdf_path)
         except Exception as e:
-            print(f"  ⚠️ Could not read PDF text: {e}")
+            print(f"   Could not read PDF text: {e}")
     else:
-        # Try to find file case-insensitive
         pass 
         
     print(f"  Inserting data for {filename}...")
-    
-    # Create Document
     new_doc = Document(
         filename=filename,
         file_path=pdf_path if os.path.exists(pdf_path) else f"legal/{filename}",
@@ -134,15 +120,12 @@ def insert_data(db, filename, data):
     db.commit()
     db.refresh(new_doc)
     
-    # Parse entities
     ents = data.get("الكيانات", {})
     rels = data.get("العلاقات", [])
     
     if not ents and not rels:
-        print("  ⚠️ Empty data for this file.")
+        print("  Empty data for this file.")
     
-    # Create Entity record
-    # Note: Using .get() for safe access
     entity_record = Entity(
         document_id=new_doc.id,
         case_number=ents.get("رقم_القضية"),
@@ -163,7 +146,6 @@ def insert_data(db, filename, data):
     )
     db.add(entity_record)
     
-    # Create Relationships
     count_rels = 0
     for rel in rels:
         from_e = rel.get("من")
@@ -181,7 +163,7 @@ def insert_data(db, filename, data):
             count_rels += 1
             
     db.commit()
-    print(f"  ✅ Inserted 1 Entity record and {count_rels} Relationships.")
+    print(f"   Inserted 1 Entity record and {count_rels} Relationships.")
 
 def main():
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

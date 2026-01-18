@@ -43,7 +43,7 @@ try:
         api_key=api_key,
     )
 
-    model_name = "google/gemini-2.0-flash-exp:free"
+    model_name = "google/gemma-3-4b-it:free"
     print(f"Sending test request to OpenRouter (using {model_name})...")
     
     response = client.chat.completions.create(

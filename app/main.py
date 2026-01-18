@@ -32,7 +32,7 @@ if openrouter_api_key:
         base_url="https://openrouter.ai/api/v1",
         api_key=openrouter_api_key
     )
-OR_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-exp:free")
+OR_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemma-3-4b-it:free")
 
 app = FastAPI()
 
@@ -126,14 +126,31 @@ async def ask_question(file: UploadFile = File(...), question: str = Form(...)):
 
         # 3. Use OpenRouter to answer the question
         prompt = f"""
-You are a legal assistant AI.
-Here is a law text extracted from a PDF:
+أنت خبير قانوني متخصص في القضاء الفلسطيني.
+النص التالي مستخرج آليًا من ملف PDF وقد يحتوي على أخطاء OCR مثل:
+- استبدال بعض الحروف (مثال: "ثن" بدل "ال")
+- أخطاء في أسماء الأشخاص أو المصطلحات القانونية
+مهمتك هي:
+1. تصحيح هذه الأخطاء ذهنيًا دون الإشارة إليها صراحة.
+2. فهم النص في سياقه القانوني الصحيح.
+3. الالتزام حصريًا بما ورد في النص دون إضافة وقائع أو افتراضات.
+
+⚠️ تعليمات إلزامية:
+- لا تفترض وجود ضرر أو تعويض أو مسؤولية إلا إذا ورد ذلك صراحة في النص.
+- لا تضف أطرافًا أو وقائع غير مذكورة.
+- إن كان النص غير كافٍ للإجابة، صرّح بذلك بوضوح.
+- طبّق المبادئ القانونية الفلسطينية فقط.
+
+النص القانوني المستخرج:
 {law_text}
 
-The user asks this question based on the content above:
+سؤال المستخدم:
 {question}
 
-Give a clear and correct answer in Arabic based only on the text provided.
+طريقة الإجابة:
+- أجب باللغة العربية الفصحى.
+- قدّم إجابة قانونية موجزة، دقيقة، ومنضبطة.
+- إن أمكن، لخّص النتيجة النهائية للحكم أو القاعدة القانونية المستخلصة.
 """
         messages = [
             {"role": "user", "content": prompt}

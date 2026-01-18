@@ -11,7 +11,7 @@ class Document(Base):
     file_path = Column(String)
     upload_date = Column(DateTime, default=datetime.utcnow)
     processed_date = Column(DateTime, nullable=True)
-    status = Column(String, default="pending")  # pending, processed, error
+    status = Column(String, default="pending") 
     raw_text = Column(Text, nullable=True)
     
     # Relationships
@@ -24,8 +24,7 @@ class Entity(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     document_id = Column(Integer, ForeignKey("documents.id"))
-    
-    # Core case information
+
     case_number = Column(String, nullable=True)
     court_name = Column(String, nullable=True)
     judgment_date = Column(String, nullable=True)
@@ -68,7 +67,6 @@ class Entity(Base):
     verdict = Column(Text, nullable=True)
     reasoning = Column(Text, nullable=True)
     
-    # Store all extracted data as JSON for flexibility
     raw_entities = Column(JSON, nullable=True)
     
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -89,5 +87,5 @@ class EntityRelationship(Base):
     
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    # Relationship
+
     document = relationship("Document", back_populates="relationships")

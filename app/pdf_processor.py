@@ -4,25 +4,21 @@ from typing import Optional
 
 def extract_text_from_pdf(pdf_path: str) -> Optional[str]:
     """
-    Extract text content from a PDF file.
-    
-    Args:
-        pdf_path: Path to the PDF file
-        
-    Returns:
-        Extracted text as string, or None if extraction fails
+    Extract text content from a PDF file using PyPDF2.
     """
     try:
+        text = ""
         with open(pdf_path, 'rb') as file:
             pdf_reader = PyPDF2.PdfReader(file)
-            text = ""
+            for page in pdf_reader.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text += page_text + "\n"
+        
+        if not text.strip():
+            return None
             
-            # Extract text from all pages
-            for page_num in range(len(pdf_reader.pages)):
-                page = pdf_reader.pages[page_num]
-                text += page.extract_text() + "\n"
-            
-            return text.strip()
+        return text.strip()
     except Exception as e:
         print(f"Error extracting text from {pdf_path}: {str(e)}")
         return None

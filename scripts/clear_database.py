@@ -12,7 +12,7 @@ print("Deleting all documents from database...")
 db.query(Document).delete()
 db.commit()
 
-print("✅ Database cleared!")
+print("Database cleared!")
 print("Now run: python process_legal_pdfs.py")
 
 db.close()

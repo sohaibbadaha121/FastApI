@@ -33,9 +33,9 @@ Text:
     
     print("Sending to Gemini...")
     response = model.generate_content(prompt)
-    print(f"✅ Response: {response.text}")
+    print(f" Response: {response.text}")
     
 except Exception as e:
-    print(f"❌ Error: {e}")
+    print(f" Error: {e}")
     import traceback
     traceback.print_exc()
