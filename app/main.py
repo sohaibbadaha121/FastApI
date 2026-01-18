@@ -34,11 +34,15 @@ if openrouter_api_key:
     )
 OR_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemma-3-4b-it:free")
 
+# Create tables if they don't exist
+from app.models import Base
+Base.metadata.create_all(bind=engine)
+
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:4200"],
+    allow_origins=["*"], # In production, replace with specific origins if needed
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
