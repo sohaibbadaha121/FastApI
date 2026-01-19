@@ -61,6 +61,7 @@ def migrate():
         execute_values(pg_cursor, insert_query, cleaned_rows)
         
         print(f" تم نقل {len(rows)} سجل إلى {table}.")
+        
 
     pg_conn.commit()
     sqlite_conn.close()
