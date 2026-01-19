@@ -36,29 +36,33 @@ def get_sql_from_llm(user_question):
         print("[ERROR] OpenRouter API key not configured")
         return None
 
-    # Detect if we are using PostgreSQL or SQLite to adjust the prompt
     is_postgres = engine.url.drivername.startswith("postgresql")
     like_op = "ILIKE" if is_postgres else "LIKE"
+    
+    # Simple rule for PG: cast JSON columns to text
+    json_cast_rule = "في PostgreSQL، يجب تحويل أعمدة الـ JSON إلى نص باستخدام CAST(column AS TEXT) قبل استخدام ILIKE." if is_postgres else ""
 
     schema_info = f"""
 أنت خبير قاعدة بيانات {"PostgreSQL" if is_postgres else "SQLite"}. الجداول المتاحة:
 
-1. جدول [entities]: يحتوي على (case_number, court_name, judge, plaintiff, defendant, verdict, reasoning).
+1. جدول [entities]: يحتوي على أعمدة نصية (case_number, court_name, verdict, reasoning) وأعمدة JSON (judge, plaintiff, defendant).
    - يستخدم للبحث عن: أسماء القضاة، المدعين، المدعى عليهم، أرقام القضايا، وعدد القضايا.
 
 2. جدول [entity_relationships]: يحتوي على (from_entity, relationship_type, to_entity).
-   - يستخدم **فقط** عند السؤال عن كلمة "علاقات" أو "روابط".
 
 قواعد حاسمة:
-- استخدم العمليات الحسابية القياسية.
-- للبحث النصي، استخدم المشغل **{like_op}** لضمان عدم الحساسية لحالة الأحرف.
-- ممنوع استخدام JOIN نهائياً.
-- ممنوع وضع % داخل الاسم (مثلاً '%أحمد %علي%' خطأ، الصحيح '%أحمد علي%').
-- أرجع فقط كود SQL.
+- للبحث النصي، استخدم المشغل **{like_op}**.
+{json_cast_rule}
+- في PostgreSQL، عند البحث في أسماء (المدعين، القضاة، المدعى عليهم)، استخدم دائماً: CAST(اسم_العمود AS TEXT) {like_op} '%الاسم%'.
+- ممنوع استخدام JOIN.
+- أرجع فقط كود SQL بدون أي شرح.
 
-أمثلة:
-س: كم عدد قضايا القاضي أحمد المغني؟
-ج: SELECT COUNT(*) FROM entities WHERE judge {like_op} '%أحمد المغني%';
+أمثلة لـ PostgreSQL:
+س: كم عدد قضايا القاضي أحمد؟
+ج: SELECT COUNT(*) FROM entities WHERE CAST(judge AS TEXT) ILIKE '%أحمد%';
+
+س: قضايا المدعي محمد
+ج: SELECT * FROM entities WHERE CAST(plaintiff AS TEXT) ILIKE '%محمد%';
 """
 
     system_prompt = f"أنت خبير SQL متخصص في القضايا القانونية العربية. مهمتك هي تحويل السؤال إلى SQL بدقة متناهية.\n{schema_info}"
