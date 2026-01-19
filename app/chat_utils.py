@@ -1,10 +1,11 @@
 import os
 import sys
 import json
-import sqlite3
 import time
 from dotenv import find_dotenv, load_dotenv
 from openai import OpenAI
+from sqlalchemy import text
+from app.database import engine
 
 env_file = find_dotenv()
 if env_file:
@@ -26,7 +27,6 @@ if api_key:
     )
 
 MODEL_NAME = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
-DB_PATH = "legal_documents.db"
 
 def get_sql_from_llm(user_question):
     """
@@ -36,8 +36,12 @@ def get_sql_from_llm(user_question):
         print("[ERROR] OpenRouter API key not configured")
         return None
 
-    schema_info = """
-أنت خبير SQLite. الجداول المتاحة:
+    # Detect if we are using PostgreSQL or SQLite to adjust the prompt
+    is_postgres = engine.url.drivername.startswith("postgresql")
+    like_op = "ILIKE" if is_postgres else "LIKE"
+
+    schema_info = f"""
+أنت خبير قاعدة بيانات {"PostgreSQL" if is_postgres else "SQLite"}. الجداول المتاحة:
 
 1. جدول [entities]: يحتوي على (case_number, court_name, judge, plaintiff, defendant, verdict, reasoning).
    - يستخدم للبحث عن: أسماء القضاة، المدعين، المدعى عليهم، أرقام القضايا، وعدد القضايا.
@@ -45,20 +49,16 @@ def get_sql_from_llm(user_question):
 2. جدول [entity_relationships]: يحتوي على (from_entity, relationship_type, to_entity).
    - يستخدم **فقط** عند السؤال عن كلمة "علاقات" أو "روابط".
 
-أمثلة (التزم بنفس النمط تماماً):
-س: كم عدد قضايا القاضي أحمد المغني؟
-ج: SELECT COUNT(*) FROM entities WHERE judge LIKE '%أحمد المغني%';
-
-س: ابحث عن علاقات أحمد
-ج: SELECT * FROM entity_relationships WHERE from_entity LIKE '%أحمد%' OR to_entity LIKE '%أحمد%';
-
-س: تفاصيل قضايا المتهم علي
-ج: SELECT * FROM entities WHERE defendant LIKE '%علي%';
-
 قواعد حاسمة:
+- استخدم العمليات الحسابية القياسية.
+- للبحث النصي، استخدم المشغل **{like_op}** لضمان عدم الحساسية لحالة الأحرف.
 - ممنوع استخدام JOIN نهائياً.
 - ممنوع وضع % داخل الاسم (مثلاً '%أحمد %علي%' خطأ، الصحيح '%أحمد علي%').
 - أرجع فقط كود SQL.
+
+أمثلة:
+س: كم عدد قضايا القاضي أحمد المغني؟
+ج: SELECT COUNT(*) FROM entities WHERE judge {like_op} '%أحمد المغني%';
 """
 
     system_prompt = f"أنت خبير SQL متخصص في القضايا القانونية العربية. مهمتك هي تحويل السؤال إلى SQL بدقة متناهية.\n{schema_info}"
@@ -75,7 +75,6 @@ def get_sql_from_llm(user_question):
             response = client.chat.completions.create(model=MODEL_NAME, messages=messages)
             
             sql = response.choices[0].message.content.strip()
-            print(f"[DEBUG] Raw Response: {sql}")
             
             if "```sql" in sql:
                 sql = sql.split("```sql")[1].split("```")[0].strip()
@@ -88,8 +87,6 @@ def get_sql_from_llm(user_question):
                 sql = match.group(1).strip()
             
             sql = sql.rstrip(';').strip()
-            
-            print(f"[DEBUG] Final SQL: {sql}")
             return sql
         except Exception as e:
             print(f"Error: {e}")
@@ -100,24 +97,19 @@ def get_sql_from_llm(user_question):
 
 def execute_sql(sql, user_question=""):
     """
-    Execute SQL query on the database.
+    Execute SQL query using SQLAlchemy engine.
     """
     if not sql or not sql.lower().startswith("select"):
         return {"error": "Only SELECT queries allowed or invalid SQL generated"}
     
     try:
-        db_path_absolute = os.path.abspath(DB_PATH)
-        conn = sqlite3.connect(db_path_absolute)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        
-        cursor.execute(sql)
-        rows = cursor.fetchall()
-        
-        results = [dict(row) for row in rows]
-        
-        conn.close()
-        
-        return {"success": True, "count": len(results), "data": results}
+        with engine.connect() as connection:
+            result = connection.execute(text(sql))
+            rows = result.fetchall()
+            
+            # Map Row objects to dictionaries
+            results = [dict(row._mapping) for row in rows]
+            
+            return {"success": True, "count": len(results), "data": results}
     except Exception as e:
         return {"error": str(e)}
