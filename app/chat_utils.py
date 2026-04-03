@@ -98,6 +98,7 @@ def get_sql_from_llm(user_question):
 def execute_sql(sql, user_question=""):
     """
     Execute SQL query using SQLAlchemy engine.
+    If COUNT query detected, also fetch full details.
     """
     if not sql or not sql.lower().startswith("select"):
         return {"error": "Only SELECT queries allowed or invalid SQL generated"}
@@ -110,6 +111,31 @@ def execute_sql(sql, user_question=""):
             # Map Row objects to dictionaries
             results = [dict(row._mapping) for row in rows]
             
-            return {"success": True, "count": len(results), "data": results}
+            # Detect if this is a COUNT(*) query
+            is_count_query = "count(*)" in sql.lower()
+            
+            if is_count_query and results:
+                # Extract the count value from the first result
+                count_value = list(results[0].values())[0] if results[0] else 0
+                
+                # Generate a new query to fetch details by replacing COUNT(*) with *
+                import re
+                details_sql = re.sub(r'count\(\s*\*\s*\)', '*', sql, flags=re.IGNORECASE)
+                
+                # Execute the details query
+                details_result = connection.execute(text(details_sql))
+                details_rows = details_result.fetchall()
+                details = [dict(row._mapping) for row in details_rows]
+                
+                return {
+                    "success": True, 
+                    "count": count_value,
+                    "summary": f"تم العثور على {count_value} من القضايا ",
+                    "data": details,
+                    "sql": details_sql
+                }
+            
+            return {"success": True, "count": len(results), "data": results, "sql": sql}
+            
     except Exception as e:
         return {"error": str(e)}

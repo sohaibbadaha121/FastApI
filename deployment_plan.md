@@ -1,50 +1,50 @@
-# خطة تجهيز مشروع FastAPI للرفع على Render
+# FastAPI Deployment Plan (Render)
 
-تهدف هذه الخطة إلى تحويل قاعدة البيانات من SQLite إلى PostgreSQL (لتجنب فقدان البيانات) وتجهيز إعدادات السيرفر للعمل في بيئة الإنتاج (Production).
+The goal of this plan is to migrate the database from SQLite to PostgreSQL (to prevent data loss) and set up the server configuration for our production environment.
 
-## المرحلة الأولى: تعديل الكود البرمجي (Code Preparation)
+## Phase 1: Code Preparation
 
-### 1.1 تحديث الاتصال بقاعدة البيانات
-*   تعديل `app/database.py` ليدعم المتغير البيئي `DATABASE_URL`.
-*   إضافة معالجة لرابط PostgreSQL (تحويل `postgres://` إلى `postgresql://`).
+### 1.1 Update Database Connection
+* Modify `app/database.py` to support the `DATABASE_URL` environment variable.
+* Add a fix for the PostgreSQL URL format (replacing `postgres://` with `postgresql://`).
 
-### 1.2 تحديث ملف الاعتماديات `requirements.txt`
-*   إضافة `psycopg2-binary` للاتصال بقاعدة PostgreSQL.
-*   إضافة `gunicorn` كـ Process Manager للإنتاج.
+### 1.2 Update `requirements.txt`
+* Include `psycopg2-binary` for the PostgreSQL connection.
+* Include `gunicorn` as the production process manager.
 
-### 1.3 تحديث إعدادات CORS
-*   تحديث `app/main.py` للسماح بطلبات من الدومين الخاص بالفرونت آند المستقبلي أو استخدام `*` مؤقتاً.
-
----
-
-## المرحلة الثانية: إعدادات Render (Dashboard Setup)
-
-### 2.1 إنشاء قاعدة البيانات (Render PostgreSQL)
-1.  من لوحة تحكم Render، اختر **New** ثم **PostgreSQL**.
-2.  قم بتسمية قاعدة البيانات (مثلاً `legal_db`).
-3.  بعد الإنشاء، سيقوم Render بإعطائك رابط "Internal Database URL" (سيتم ربطه آلياً بالخدمة).
-
-### 2.2 إنشاء خدمة الويب (Render Web Service)
-1.  اختر **New** ثم **Web Service**.
-2.  اربط حساب GitHub/GitLab الخاص بك واختر المستودع (Repository).
-3.  الإعدادات الأساسية:
-    *   **Environment**: `Python`
-    *   **Build Command**: `pip install -r requirements.txt`
-    *   **Start Command**: `gunicorn -w 4 -k uvicorn.workers.UvicornWorker app.main:app`
+### 1.3 Update CORS Settings
+* Tweak `app/main.py` to allow requests from our future frontend domain (or just use `*` for now).
 
 ---
 
-## المرحلة الثالثة: المتغيرات البيئية (Environment Variables)
+## Phase 2: Render Dashboard Setup
 
-يجب إضافة المفاتيح التالية في قسم **Environment** في Render:
-*   `DATABASE_URL`: (يتم ربطه تلقائياً عند ربط قاعدة البيانات بالخدمة).
-*   `GEMINI_API_KEY`: مفتاح جوجل.
-*   `OPENROUTER_API_KEY`: مفتاح OpenRouter.
-*   `PYTHON_VERSION`: `3.10.0` (أو النسخة التي تفضلها).
+### 2.1 Create the Database (Render PostgreSQL)
+1. From the Render dashboard, click **New** -> **PostgreSQL**.
+2. Name the database (e.g., `legal_db`).
+3. After creation, Render will assign an "Internal Database URL" (we'll bind this to our web service).
+
+### 2.2 Create the Web Service 
+1. Click **New** -> **Web Service**.
+2. Link the GitHub/GitLab account and select the repository.
+3. Basic configuration:
+    * **Environment**: `Python`
+    * **Build Command**: `pip install -r requirements.txt`
+    * **Start Command**: `gunicorn -w 4 -k uvicorn.workers.UvicornWorker app.main:app`
 
 ---
 
-## المرحلة الرابعة: التحقق والاختبار
+## Phase 3: Environment Variables Settings
 
-*   التأكد من أن الجداول يتم إنشاؤها تلقائياً عند التشغيل الأول.
-*   اختبار رفع ملف PDF والتأكد من حفظ البيانات في PostgreSQL.
+The following keys need to be added in the **Environment** section on Render:
+* `DATABASE_URL`: (Populates automatically when the DB is linked to the service).
+* `GEMINI_API_KEY`: Google API key.
+* `OPENROUTER_API_KEY`: OpenRouter API key.
+* `PYTHON_VERSION`: `3.10.0` (or whichever version we prefer).
+
+---
+
+## Phase 4: Testing & Verification
+
+* Make sure tables are successfully generated on the initial startup.
+* Test the PDF upload flow and confirm that the extracted data is being saved correctly into PostgreSQL.

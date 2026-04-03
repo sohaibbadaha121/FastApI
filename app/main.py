@@ -224,25 +224,59 @@ async def query_database(request: DbQueryRequest):
                 return {"answer": answer_text}
                 
             data = results.get("data", [])
+            summary = results.get("summary", None)  # Get summary if available (from COUNT queries)
             
+            # Define essential fields to return (filter out verbose fields)
+            essential_fields = [
+                "case_number", "court_name", "judgment_date", 
+                "plaintiff", "defendant", "judge", 
+                "verdict", "decision"
+            ]
 
             mapped_data = []
             for row in data:
                 item = dict(row)
                 clean_item = {"source_document": item.get("document_id")}
                 for k, v in item.items():
-                    if k in ["raw_entities", "created_at", "id", "document_id"] or v in ["null", None, "", []]: continue
+                    # Skip technical/verbose fields
+                    if k in ["raw_entities", "created_at", "id", "document_id", "reasoning", 
+                             "legal_articles", "plaintiff_lawyer", "defendant_lawyer",
+                             "witnesses", "experts", "chief_judge", "court_members", 
+                             "court_clerk", "precedents", "applied_laws", "financial_amounts",
+                             "properties", "compensations", "locations", "important_dates",
+                             "session_date", "case_type", "case_subject"]:
+                        continue
+                    
+                    # Skip null/empty values
+                    if v in ["null", None, "", []]: 
+                        continue
+                    
+                    # Parse JSON strings
                     if isinstance(v, str) and v.startswith("["):
                         try:
                             parsed = json.loads(v)
                             if parsed: clean_item[k] = parsed
                             continue
                         except: pass
+                    
                     clean_item[k] = v
-                if "relationships" not in clean_item: clean_item["relationships"] = []
-                mapped_data.append(clean_item)
                 
-            return {"answer": json.dumps(mapped_data, ensure_ascii=False, indent=2)}
+                if "relationships" not in clean_item: 
+                    clean_item["relationships"] = []
+                    
+                mapped_data.append(clean_item)
+            
+            # If summary exists (COUNT query), include it in response
+            response_data = {
+                "results": mapped_data,
+                "sql": results.get("sql", sql),
+                "count": results.get("count", len(mapped_data))
+            }
+            
+            if summary:
+                response_data["summary"] = summary
+
+            return {"answer": json.dumps(response_data, ensure_ascii=False, indent=2)}
 
         except Exception as e:
             import traceback
@@ -340,5 +374,49 @@ async def query_database(request: DbQueryRequest):
 
     except Exception as e:
         return {"error": f"Database search error: {str(e)}"}
+    finally:
+        session.close()
+
+
+@app.get("/api/all-data")
+def get_all_data(limit: int = 50):
+    session = SessionLocal()
+    try:
+        # Fetch latest entities (Assuming 'id' is the primary key)
+        entities = session.query(Entity).order_by(Entity.id.desc()).limit(limit).all()
+        
+        results = []
+        for ent in entities:
+            # Create a clean dictionary from the entity object
+            item = {
+                "source_document": ent.document_id,
+                "case_number": ent.case_number,
+                "court_name": ent.court_name,
+                "judgment_date": ent.judgment_date, # Assuming this field exists and is populated
+                "plaintiff": ent.plaintiff,
+                "defendant": ent.defendant,
+                "judge": ent.judge,
+                "verdict": ent.verdict,
+                "decision": ent.decision if hasattr(ent, 'decision') else None
+            }
+
+            # Parse JSON strings for list fields
+            for key in ["plaintiff", "defendant", "judge"]:
+                val = item.get(key)
+                if val and isinstance(val, str) and val.strip().startswith("["):
+                    try:
+                        parsed = json.loads(val)
+                        if parsed: item[key] = parsed
+                    except:
+                        pass
+            
+            # Add relationship placeholder
+            item["relationships"] = []
+
+            results.append(item)
+            
+        return {"results": results, "count": len(results)}
+    except Exception as e:
+        return {"error": str(e)}
     finally:
         session.close()
