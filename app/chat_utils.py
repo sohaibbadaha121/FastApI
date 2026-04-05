@@ -37,27 +37,29 @@ def get_sql_from_llm(user_question):
         return None
 
     schema_info = """
-أنت خبير SQLite. الجداول المتاحة:
+أنت خبير PostgreSQL. الجداول المتاحة:
 
 1. جدول [entities]: يحتوي على (case_number, court_name, judge, plaintiff, defendant, verdict, reasoning).
    - يستخدم للبحث عن: أسماء القضاة، المدعين، المدعى عليهم، أرقام القضايا، وعدد القضايا.
+   - **انتبه جداً**: أعمدة الأطراف مثل (judge, plaintiff, defendant, lawyers, etc) مبرمجة كـ JSON. يجب عليك تحويلها إلى نص عند البحث باستخدام ::text.
 
 2. جدول [entity_relationships]: يحتوي على (from_entity, relationship_type, to_entity).
    - يستخدم **فقط** عند السؤال عن كلمة "علاقات" أو "روابط".
 
 أمثلة (التزم بنفس النمط تماماً):
 س: كم عدد قضايا القاضي أحمد المغني؟
-ج: SELECT COUNT(*) FROM entities WHERE judge LIKE '%أحمد المغني%';
+ج: SELECT COUNT(*) FROM entities WHERE judge::text LIKE '%أحمد المغني%';
 
 س: ابحث عن علاقات أحمد
 ج: SELECT * FROM entity_relationships WHERE from_entity LIKE '%أحمد%' OR to_entity LIKE '%أحمد%';
 
 س: تفاصيل قضايا المتهم علي
-ج: SELECT * FROM entities WHERE defendant LIKE '%علي%';
+ج: SELECT * FROM entities WHERE defendant::text LIKE '%علي%';
 
 قواعد حاسمة:
-- ممنوع استخدام JOIN نهائياً.
-- ممنوع وضع % داخل الاسم (مثلاً '%أحمد %علي%' خطأ، الصحيح '%أحمد علي%').
+- قاعدة البيانات هي PostgreSQL.
+- ممنوع استخدام JOIN نهائياً في نفس الجدول.
+- للبحث داخل قوائم الـ JSON، استخدم دائماً `column_name::text LIKE '%value%'`.
 - أرجع فقط كود SQL.
 """
 
