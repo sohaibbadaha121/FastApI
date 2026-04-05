@@ -2,6 +2,10 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from dotenv import load_dotenv
+
+# تحميل ملف البيئة قبل أي محاولة لقراءة المتغيرات
+load_dotenv()
 
 # Get database URL from environment variable (Render provides this)
 # Fallback to local SQLite for development
