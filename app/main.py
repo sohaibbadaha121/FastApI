@@ -16,7 +16,8 @@ from app.pdf_processor import extract_text_from_pdf
 from openai import OpenAI
 
 load_dotenv()
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+gemini_api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI")
+genai.configure(api_key=gemini_api_key)
 
 # OpenRouter Configuration
 openrouter_api_key = (
@@ -42,7 +43,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # In production, replace with specific origins if needed
+    allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -107,29 +108,75 @@ Court Text:
 
 
 @app.post("/api/ask")
-async def ask_question(file: UploadFile = File(...), question: str = Form(...)):
+async def ask_question(file: UploadFile = File(None), question: str = Form(...)):
     """
-    Revised endpoint to handle PDF upload and question answering.
-    Replaces the previous text-based ask endpoint.
+    Revised endpoint to handle PDF upload OR Database RAG Queries.
     """
-    temp_path = f"temp_{file.filename}"
-    
-    try:
-        # 1. Save the uploaded file temporarily
-        with open(temp_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        
-        # 2. Extract text using our existing processor
-        law_text = extract_text_from_pdf(temp_path)
-        
-        if not law_text:
-            return {"error": "Could not extract text from the PDF file."}
+    if file is None:
+        # -------------------------------------------------------------
+        # Path 1: Global RAG Search over all Legal Word Docs
+        # -------------------------------------------------------------
+        try:
+            from app.rag.vector_store import VectorStoreManager
+            
+            vector_store = VectorStoreManager()
+            results = vector_store.search(question, n_results=10)
+            
+            if not results['documents'] or not results['documents'][0]:
+                return {"answer": "لم أتمكن من العثور على أية تشريعات مرتبطة بسؤالك."}
+                
+            # Combine the chunks into a unified context string
+            context_text = "\n\n".join([
+                f"--- نص قانوني من تشريع: {meta.get('filename', 'Unknown')} ---\n{doc}"
+                for doc, meta in zip(results['documents'][0], results['metadatas'][0])
+            ])
+            
+            prompt = f"""
+أنت مستشار قانوني فلسطيني ذكي ومحترف. 
+الرجاء الإجابة على سؤال المستخدم بناءً **فقط** على النصوص القانونية التالية المستخرجة من التشريعات الرسمية:
 
-        if not or_client:
-            return {"error": "OpenRouter API key is not configured. Please check your .env file."}
+النصوص القانونية:
+{context_text}
 
-        # 3. Use OpenRouter to answer the question
-        prompt = f"""
+سؤال المستخدم:
+{question}
+
+طريقة الإجابة الإلزامية:
+1. أجب باللغة العربية الفصحى بشكل دقيق ومباشر.
+2. اعتمد حصرياً على النصوص المرفقة، ولا تؤلف أي قوانين أو عقوبات من خارجها.
+3. اُذكر اسم التشريع الذي اعتمدت عليه لتعزيز موثوقية جوابك إن أمكن.
+4. رتب إجابتك في نقاط واضحة (Bullet points) لتسهيل القراءة.
+"""
+            # Using Gemini 2.5 Flash as requested
+            model = genai.GenerativeModel("gemini-2.5-flash")
+            response = model.generate_content(prompt)
+            
+            return {
+                "answer": response.text,
+                "sources": list(set([m.get("filename") for m in results['metadatas'][0]]))
+            }
+        except Exception as e:
+            return {"error": f"Error performing RAG search: {str(e)}"}
+
+    else:
+        # -------------------------------------------------------------
+        # Path 2: Explicit PDF Upload QA (Previous Logic)
+        # -------------------------------------------------------------
+        temp_path = f"temp_{file.filename}"
+        
+        try:
+            with open(temp_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+            
+            law_text = extract_text_from_pdf(temp_path)
+            
+            if not law_text:
+                return {"error": "Could not extract text from the PDF file."}
+
+            if not or_client:
+                return {"error": "OpenRouter API key is not configured. Please check your .env file."}
+
+            prompt = f"""
 أنت خبير قانوني متخصص في القضاء الفلسطيني.
 النص التالي مستخرج آليًا من ملف PDF وقد يحتوي على أخطاء OCR مثل:
 - استبدال بعض الحروف (مثال: "ثن" بدل "ال")
@@ -139,7 +186,7 @@ async def ask_question(file: UploadFile = File(...), question: str = Form(...)):
 2. فهم النص في سياقه القانوني الصحيح.
 3. الالتزام حصريًا بما ورد في النص دون إضافة وقائع أو افتراضات.
 
-⚠️ تعليمات إلزامية:
+تعليمات إلزامية:
 - لا تفترض وجود ضرر أو تعويض أو مسؤولية إلا إذا ورد ذلك صراحة في النص.
 - لا تضف أطرافًا أو وقائع غير مذكورة.
 - إن كان النص غير كافٍ للإجابة، صرّح بذلك بوضوح.
@@ -156,33 +203,30 @@ async def ask_question(file: UploadFile = File(...), question: str = Form(...)):
 - قدّم إجابة قانونية موجزة، دقيقة، ومنضبطة.
 - إن أمكن، لخّص النتيجة النهائية للحكم أو القاعدة القانونية المستخلصة.
 """
-        messages = [
-            {"role": "user", "content": prompt}
-        ]
-        
-        response = or_client.chat.completions.create(
-            model=OR_MODEL,
-            messages=messages
-        )
-        
-        answer_text = response.choices[0].message.content
-        
-        return {
-            "answer": answer_text,
-            "filename": file.filename,
-            "text_length": len(law_text)
-        }
+            messages = [{"role": "user", "content": prompt}]
+            
+            response = or_client.chat.completions.create(
+                model=OR_MODEL,
+                messages=messages
+            )
+            
+            answer_text = response.choices[0].message.content
+            
+            return {
+                "answer": answer_text,
+                "filename": file.filename,
+                "text_length": len(law_text)
+            }
 
-    except Exception as e:
-        return {"error": f"Error processing PDF: {str(e)}"}
-    
-    finally:
-        # 4. Clean up the temporary file
-        if os.path.exists(temp_path):
-            try:
-                os.remove(temp_path)
-            except:
-                pass
+        except Exception as e:
+            return {"error": f"Error processing PDF: {str(e)}"}
+        
+        finally:
+            if os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except:
+                    pass
 
 
 @app.post("/api/db-query")

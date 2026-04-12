@@ -1,35 +1,37 @@
 import os
-import sys
-import time
 from dotenv import load_dotenv
 import google.generativeai as genai
 
-load_dotenv()
-api_key = os.getenv("GEMINI")
+def test_gemini():
+    load_dotenv()
+    
+    api_key = os.getenv("GEMINI")
+    if not api_key:
+        print("API Key not found in .env file. Please check your GEMINI variable.")
+        return
+        
+    print("API Key loaded successfully.")
+    
+    try:
+        genai.configure(api_key=api_key)
+        
+        # Using the standard modern flash model
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        
+        print("Sending a test prompt to Gemini...")
+        
+        prompt = "مرحبا، هل تدعم اللغة العربية؟ أجب بكلمة واحدة فقط: نعم"
+        response = model.generate_content(prompt)
+        
+        print("-" * 30)
+        print("Gemini Response:")
+        print(response.text)
+        print("-" * 30)
+        print("Test completed successfully. Gemini is working!")
+        
+    except Exception as e:
+        print("\nAn error occurred while connecting to Gemini:")
+        print(str(e))
 
-print(f"API Key: {api_key[:20]}..." if api_key else "No API key")
-
-genai.configure(api_key=api_key)
-
-try:
-    model = genai.GenerativeModel("gemini-2.5-flash")
-    print("Sending test request to Gemini...")
-    
-    response = model.generate_content("Say 'Hello, I am working!' in one sentence.")
-    
-    print("SUCCESS!")
-    print(f"Response: {response.text}")
-    
-except Exception as e:
-    print(f"FAILED: {type(e).__name__}")
-    print(f"Error: {str(e)}")
-    
-    
-    with open("gemini_error.txt", "w", encoding="utf-8") as f:
-        import traceback
-        f.write(f"Error Type: {type(e).__name__}\n")
-        f.write(f"Error Message: {str(e)}\n\n")
-        f.write("Full Traceback:\n")
-        f.write(traceback.format_exc())
-    
-    print("\nFull error written to gemini_error.txt")
+if __name__ == "__main__":
+    test_gemini()
