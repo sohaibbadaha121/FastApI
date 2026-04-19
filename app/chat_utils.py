@@ -39,9 +39,11 @@ def get_sql_from_llm(user_question):
     schema_info = """
 أنت خبير PostgreSQL. الجداول المتاحة:
 
-1. جدول [entities]: يحتوي على (case_number, court_name, judge, plaintiff, defendant, verdict, reasoning).
-   - يستخدم للبحث عن: أسماء القضاة، المدعين، المدعى عليهم، أرقام القضايا، وعدد القضايا.
-   - **انتبه جداً**: أعمدة الأطراف مثل (judge, plaintiff, defendant, lawyers, etc) مبرمجة كـ JSON. يجب عليك تحويلها إلى نص عند البحث باستخدام ::text.
+1. جدول [entities]: يحتوي على جميع الأعمدة التالية:
+   (case_number, court_name, judge, plaintiff, defendant, plaintiff_lawyer, defendant_lawyer, verdict, reasoning)
+   - يستخدم للبحث عن: أسماء القضاة، المدعين، المدعى عليهم، المحامين، أرقام القضايا، وعدد القضايا.
+   - **هام جداً**: استخدم `plaintiff_lawyer` للبحث عن محامي المدعي، واستخدم `defendant_lawyer` للبحث عن محامي المدعى عليه. ليس لدينا عامود باسم (lawyer_name).
+   - **انتبه جداً**: أعمدة الأطراف مثل (judge, plaintiff, defendant, plaintiff_lawyer, defendant_lawyer) مبرمجة كـ JSON. يجب عليك تحويلها إلى نص عند البحث باستخدام ::text.
 
 2. جدول [entity_relationships]: يحتوي على (from_entity, relationship_type, to_entity).
    - يستخدم **فقط** عند السؤال عن كلمة "علاقات" أو "روابط".
@@ -49,6 +51,9 @@ def get_sql_from_llm(user_question):
 أمثلة (التزم بنفس النمط تماماً):
 س: كم عدد قضايا القاضي أحمد المغني؟
 ج: SELECT COUNT(*) FROM entities WHERE judge::text LIKE '%أحمد المغني%';
+
+س: اعطيني محامي المدعي في القضية التي رقمها 2016/848
+ج: SELECT plaintiff_lawyer FROM entities WHERE case_number = '2016/848';
 
 س: ابحث عن علاقات أحمد
 ج: SELECT * FROM entity_relationships WHERE from_entity LIKE '%أحمد%' OR to_entity LIKE '%أحمد%';
@@ -59,6 +64,7 @@ def get_sql_from_llm(user_question):
 قواعد حاسمة:
 - قاعدة البيانات هي PostgreSQL.
 - ممنوع استخدام JOIN نهائياً في نفس الجدول.
+- لا تخترع أسماء أعمدة غير موجودة في القائمة أعلاه (لا تستخدم lawyer_name نهائياً).
 - للبحث داخل قوائم الـ JSON، استخدم دائماً `column_name::text LIKE '%value%'`.
 - أرجع فقط كود SQL.
 """
