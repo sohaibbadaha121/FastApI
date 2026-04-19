@@ -285,8 +285,7 @@ async def query_database(request: DbQueryRequest):
                 for k, v in item.items():
                     # Skip technical/verbose fields
                     if k in ["raw_entities", "created_at", "id", "document_id", "reasoning", 
-                             "legal_articles", "plaintiff_lawyer", "defendant_lawyer",
-                             "witnesses", "experts", "chief_judge", "court_members", 
+                             "legal_articles", "witnesses", "experts", "chief_judge", "court_members", 
                              "court_clerk", "precedents", "applied_laws", "financial_amounts",
                              "properties", "compensations", "locations", "important_dates",
                              "session_date", "case_type", "case_subject"]:
