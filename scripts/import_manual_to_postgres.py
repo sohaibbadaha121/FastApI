@@ -40,7 +40,7 @@ def main():
     load_dotenv()
     
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    json_file = os.path.join(base_dir, "manual_data.json")
+    json_file = os.path.join(base_dir, "regex_extracted_data.json")
     
     print(f"Reading data from: {json_file}")
     data_objects = parse_concatenated_json(json_file)
