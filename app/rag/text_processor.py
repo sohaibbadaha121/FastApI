@@ -15,26 +15,32 @@ class ArabicTextProcessor:
         text = re.sub(r'\s+', ' ', text)
         return text.strip()
 
-    def split_into_articles(self, text: str) -> List[str]:
+    def split_into_articles(self, text: str, doc_context: str = "") -> List[str]:
         pattern = r"((?:المادة|مادة|الماده|ماده)\s*\(?\s*[\d٠-٩]+\s*\)?)"
         parts = re.split(pattern, text)
         
         chunks = []
         if parts and parts[0].strip():
-            chunks.extend(self._split_large_text(parts[0].strip()))
+            chunks.extend(self._split_large_text(parts[0].strip(), doc_context))
             
         for i in range(1, len(parts), 2):
             header = parts[i].strip()
             content = parts[i+1].strip() if i+1 < len(parts) else ""
             combined = f"{header}\n{content}"
-            chunks.extend(self._split_large_text(combined))
+            chunks.extend(self._split_large_text(combined, doc_context))
             
         return chunks
 
-    def _split_large_text(self, text: str) -> List[str]:
+    def _split_large_text(self, text: str, doc_context: str = "") -> List[str]:
         words = text.split()
+        
+        def format_chunk(t: str) -> str:
+            if doc_context:
+                return f"سياق التشريع: {doc_context} | {t}"
+            return t
+
         if len(words) <= self.max_chunk_words:
-            return [text]
+            return [format_chunk(text)]
             
         sub_chunks = []
         current_chunk = []
@@ -42,10 +48,10 @@ class ArabicTextProcessor:
         for word in words:
             current_chunk.append(word)
             if len(current_chunk) >= self.max_chunk_words:
-                sub_chunks.append(" ".join(current_chunk))
+                sub_chunks.append(format_chunk(" ".join(current_chunk)))
                 current_chunk = []
                 
         if current_chunk:
-            sub_chunks.append(" ".join(current_chunk))
+            sub_chunks.append(format_chunk(" ".join(current_chunk)))
             
         return sub_chunks
