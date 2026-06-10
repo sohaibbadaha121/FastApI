@@ -23,8 +23,7 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# Database files (generated locally on each machine)
-chroma_db/
+# Database files (generated locally - legal_docx not tracked)
 legal_docx/
 
 # Scripts
