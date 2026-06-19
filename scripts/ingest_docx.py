@@ -55,11 +55,9 @@ def main():
     for doc in raw_docs:
         # Extract title/number context from the original raw content
         doc_context = extract_doc_context(doc["content"])
-        normalized_context = processor.normalize(doc_context)
         
-        # Normalize and split into articles with context prepended
-        normalized_content = processor.normalize(doc["content"])
-        articles = processor.split_into_articles(normalized_content, doc_context=normalized_context)
+        # Split into articles with raw context prepended (no normalization)
+        articles = processor.split_into_articles(doc["content"], doc_context=doc_context)
         
         chunk_counter = 1
         for article in articles:
