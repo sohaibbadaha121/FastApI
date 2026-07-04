@@ -6,6 +6,7 @@ from dotenv import find_dotenv, load_dotenv
 from openai import OpenAI
 from sqlalchemy import text
 from app.database import engine
+from app.ollama_fallback import call_ollama, should_fallback_openrouter
 
 env_file = find_dotenv()
 if env_file:
@@ -76,30 +77,43 @@ def get_sql_from_llm(user_question):
         {"role": "user", "content": f"حول هذا السؤال إلى SQL: {user_question}"}
     ]
 
+    import re
+
+    def _extract_sql(raw: str) -> str:
+        """Strip markdown fences and extract the SELECT statement."""
+        if "```sql" in raw:
+            raw = raw.split("```sql")[1].split("```")[0].strip()
+        elif "```" in raw:
+            raw = raw.split("```")[1].split("```")[0].strip()
+        match = re.search(r'(SELECT\s+.*)', raw, re.IGNORECASE | re.DOTALL)
+        if match:
+            raw = match.group(1).strip()
+        return raw.rstrip(';').strip()
+
     max_retries = 3
     for attempt in range(max_retries):
         try:
             print(f"[DEBUG] Calling OpenRouter ({MODEL_NAME}) (attempt {attempt + 1})...")
             response = client.chat.completions.create(model=MODEL_NAME, messages=messages)
-            
             sql = response.choices[0].message.content.strip()
-            
-            if "```sql" in sql:
-                sql = sql.split("```sql")[1].split("```")[0].strip()
-            elif "```" in sql:
-                sql = sql.split("```")[1].split("```")[0].strip()
-            
-            import re
-            match = re.search(r'(SELECT\s+.*)', sql, re.IGNORECASE | re.DOTALL)
-            if match:
-                sql = match.group(1).strip()
-            
-            sql = sql.rstrip(';').strip()
-            return sql
+            return _extract_sql(sql)
+
         except Exception as e:
-            print(f"Error: {e}")
-            if attempt < max_retries - 1: time.sleep(1)
+            print(f"[TEXT-SQL] OpenRouter error (attempt {attempt + 1}): {e}")
+
+            if should_fallback_openrouter(e):
+                try:
+                    print("[TEXT-SQL] Falling back to local qwen3 via Ollama...")
+                    raw = call_ollama(messages)
+                    return _extract_sql(raw)
+                except Exception as fallback_err:
+                    print(f"[TEXT-SQL] Ollama fallback failed: {fallback_err}")
+                    return None
+
+            if attempt < max_retries - 1:
+                time.sleep(1)
             continue
+
     return None
 
 
