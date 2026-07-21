@@ -14,7 +14,6 @@ from typing import Optional, List
 from sqlalchemy import or_, cast, String
 from app.pdf_processor import extract_text_from_pdf
 from openai import OpenAI
-from app.ollama_fallback import call_ollama, should_fallback_gemini
 
 load_dotenv()
 gemini_api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI")
@@ -149,31 +148,14 @@ async def ask_question(file: UploadFile = File(None), question: str = Form(...))
 4. رتب إجابتك في نقاط واضحة (Bullet points) لتسهيل القراءة.
 5. أعطِ الإجابة مباشرة وفوراً، ولا تبدأ أبداً بعبارات مثل "بناءً على النصوص" أو "بصفتي مستشار" أو ختام بـ "هل تحتاج شيئاً آخر".
 """
-            try:
-                model = genai.GenerativeModel("gemini-2.5-flash")
-                response = model.generate_content(prompt)
-                return {
-                    "answer": response.text,
-                    "sources": list(set([m.get("filename") for m in results['metadatas'][0]]))
-                }
-            except Exception as gemini_err:
-                if should_fallback_gemini(gemini_err):
-                    print("[RAG] Falling back to local qwen3 via Ollama...")
-                    try:
-                        messages = [
-                            {"role": "system", "content": "You are a professional Palestinian legal advisor. Answer only based on the provided legal texts."},
-                            {"role": "user", "content": prompt},
-                        ]
-                        answer = call_ollama(messages)
-                        return {
-                            "answer": answer,
-                            "sources": list(set([m.get("filename") for m in results['metadatas'][0]])),
-                            "fallback": True,
-                        }
-                    except Exception as fallback_err:
-                        print(f"[RAG] Ollama fallback failed: {fallback_err}")
-                        return {"error": f"Both Gemini and local fallback failed: {fallback_err}"}
-                raise
+            # Using Gemini 2.5 Flash as requested
+            model = genai.GenerativeModel("gemini-2.5-flash")
+            response = model.generate_content(prompt)
+            
+            return {
+                "answer": response.text,
+                "sources": list(set([m.get("filename") for m in results['metadatas'][0]]))
+            }
         except Exception as e:
             return {"error": f"Error performing RAG search: {str(e)}"}
 
